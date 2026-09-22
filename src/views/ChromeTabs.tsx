@@ -23,6 +23,20 @@ export default function ChromeTabs({ chrome }: { chrome: ChromeBreakdown }) {
   const [load, setLoad] = useState<Load>({ kind: "idle" });
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
+  const [notice, setNotice] = useState<Record<string, string>>({});
+
+  const explain = (e: unknown) => {
+    const r = String(e);
+    if (r === "gone") return "This tab was already closed. Click Refresh to update the list.";
+    if (r === "not-allowed") return "Roomy isn't allowed to control Chrome. Allow it in System Settings, Privacy & Security, Automation.";
+    if (r === "not-running") return "Chrome isn't open anymore.";
+    return `Chrome didn't respond: ${r}`;
+  };
+  const say = (id: string, msg?: string) => setNotice((n) => { const next = { ...n }; if (msg) next[id] = msg; else delete next[id]; return next; });
+  const show = async (t: ChromeTab) => {
+    say(t.id);
+    try { await api.chromeTab(t.id, "show"); } catch (e) { say(t.id, explain(e)); }
+  };
 
   const fetchTabs = async () => {
     setLoad({ kind: "loading" });
@@ -50,7 +64,13 @@ export default function ChromeTabs({ chrome }: { chrome: ChromeBreakdown }) {
 
   const close = async (t: ChromeTab) => {
     setClosed((s) => new Set(s).add(t.id));
-    try { await api.chromeTab(t.id, "close"); } catch { setClosed((s) => { const n = new Set(s); n.delete(t.id); return n; }); }
+    try {
+      await api.chromeTab(t.id, "close");
+    } catch (e) {
+      if (String(e) === "gone") return; // already closed in Chrome: keep it off the list
+      setClosed((s) => { const n = new Set(s); n.delete(t.id); return n; });
+      say(t.id, explain(e));
+    }
   };
 
   const sleeping = tabs.filter((t) => t.state === "sleeping").length;
@@ -164,6 +184,7 @@ export default function ChromeTabs({ chrome }: { chrome: ChromeBreakdown }) {
                         {(copies.get(t.url) ?? 0) > 1 && <Badge tone="check">Open {copies.get(t.url)} times</Badge>}
                       </div>
                       <div className="truncate text-[12px] text-ink-3">{host(t.url)}</div>
+                      {notice[t.id] && <div role="alert" className="mt-0.5 text-[12px] text-warn-ink">{notice[t.id]}</div>}
                     </div>
                     {load.list.canMeasure && (
                       <>
@@ -172,7 +193,7 @@ export default function ChromeTabs({ chrome }: { chrome: ChromeBreakdown }) {
                       </>
                     )}
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" className="h-7 px-2" icon={ArrowUpRight} onClick={() => api.chromeTab(t.id, "show")}>Go to tab</Button>
+                      <Button variant="ghost" className="h-7 px-2" icon={ArrowUpRight} onClick={() => show(t)}>Go to tab</Button>
                       <Button variant="ghost" className="h-7 px-2" icon={X} onClick={() => close(t)} title="Close this tab. Reopen it in Chrome with Cmd+Shift+T.">Close</Button>
                     </div>
                   </li>

@@ -177,11 +177,11 @@ pub fn tab_action(id: &str, action: &str) -> Result<(), String> {
     let script = match action {
         "close" => r#"
 on run argv
-  set tid to (item 1 of argv) as integer
+  set tid to (item 1 of argv) as real
   tell application "Google Chrome"
     repeat with w in windows
       repeat with t in tabs of w
-        if id of t is tid then
+        if ((id of t) as real) = tid then
           close t
           return "ok"
         end if
@@ -192,13 +192,13 @@ on run argv
 end run"#,
         "show" => r#"
 on run argv
-  set tid to (item 1 of argv) as integer
+  set tid to (item 1 of argv) as real
   tell application "Google Chrome"
     repeat with w in windows
       set i to 0
       repeat with t in tabs of w
         set i to i + 1
-        if id of t is tid then
+        if ((id of t) as real) = tid then
           set active tab index of w to i
           set index of w to 1
           activate
@@ -211,5 +211,15 @@ on run argv
 end run"#,
         _ => return Err("Unknown action".into()),
     };
-    run_script(script, &[id]).map(|_| ())
+    match run_script(script, &[id])?.trim() {
+        "ok" => {
+            if action == "show" {
+                // Newer macOS can ignore an app bringing itself forward on request;
+                // asking Launch Services to open Chrome always brings it to the front.
+                let _ = Command::new("open").args(["-a", "Google Chrome"]).status();
+            }
+            Ok(())
+        }
+        _ => Err("gone".into()),
+    }
 }
