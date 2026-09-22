@@ -1,3 +1,4 @@
+mod chrome;
 mod memory;
 mod safety;
 mod scan;
@@ -121,11 +122,22 @@ fn open_place(place: String) {
     let target = match place.as_str() {
         "full-disk-access" => "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles".to_string(),
         "storage-settings" => "x-apple.systempreferences:com.apple.settings.Storage".to_string(),
+        "automation" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation".to_string(),
         "trash" => format!("{}/.Trash", safety::home()),
         "activity-monitor" => "/System/Applications/Utilities/Activity Monitor.app".to_string(),
         _ => return,
     };
     let _ = Command::new("open").arg(target).spawn();
+}
+
+#[tauri::command]
+async fn chrome_tabs() -> Result<chrome::TabList, String> {
+    tauri::async_runtime::spawn_blocking(chrome::list_tabs).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn chrome_tab(id: String, action: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || chrome::tab_action(&id, &action)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -151,7 +163,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState { scanning: Arc::new(AtomicBool::new(false)), cancel: Arc::new(AtomicBool::new(false)), sys: Mutex::new(System::new()) })
         .invoke_handler(tauri::generate_handler![
-            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, open_place, quit_app
+            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, open_place, quit_app, chrome_tabs, chrome_tab
         ])
         .run(tauri::generate_context!())
         .expect("error while running Roomy");

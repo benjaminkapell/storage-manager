@@ -27,6 +27,7 @@ pub struct MemoryInfo {
     pub pressure: i32,
     pub uptime_secs: u64,
     pub apps: Vec<AppUsage>,
+    pub chrome: crate::chrome::ChromeBreakdown,
 }
 
 fn pressure_level() -> i32 {
@@ -47,7 +48,7 @@ pub fn snapshot(sys: &mut System) -> MemoryInfo {
     sys.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
-        ProcessRefreshKind::nothing().with_memory().with_exe(UpdateKind::OnlyIfNotSet),
+        ProcessRefreshKind::nothing().with_memory().with_exe(UpdateKind::OnlyIfNotSet).with_cmd(UpdateKind::OnlyIfNotSet),
     );
 
     let mut groups: HashMap<String, AppUsage> = HashMap::new();
@@ -82,5 +83,6 @@ pub fn snapshot(sys: &mut System) -> MemoryInfo {
         pressure: pressure_level(),
         uptime_secs: System::uptime(),
         apps,
+        chrome: crate::chrome::breakdown(sys),
     }
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, Card, PageHeader, SizeBar } from "../components/ui";
 import { api, type AppUsage, type MemoryInfo } from "../lib/api";
 import { duration, memSize as size } from "../lib/format";
+import ChromeTabs from "./ChromeTabs";
 
 const STATUS = {
   1: { word: "Comfortable", tone: "ok", text: "Your Mac has enough memory for what's open right now." },
@@ -63,6 +64,8 @@ export default function Memory({ diskFreePct }: { diskFreePct: number }) {
           </Stat>
         </div>
       </Card>
+
+      {m.chrome.running && <ChromeTabs chrome={m.chrome} />}
 
       {diskFreePct < 0.1 && (
         <Card className="flex items-start gap-4 border-warn/40 bg-warn-soft p-5 shadow-none">

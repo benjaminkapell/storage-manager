@@ -43,10 +43,16 @@ export interface ScanResult {
 export interface Progress { phase: "walking" | "duplicates"; files: number; bytes: number; current: string; done: number; total: number }
 export interface DiskInfo { total: number; used: number; free: number; fullDiskAccess: boolean; scanning: boolean; home: string }
 export interface AppUsage { name: string; bytes: number; processes: number; appPath: string | null; isSystem: boolean }
+export interface ChromeBreakdown {
+  running: boolean; total: number; tabs: number; tabProcesses: number; extensions: number;
+  extensionProcesses: number; graphics: number; browser: number; helpers: number;
+}
 export interface MemoryInfo {
   total: number; used: number; available: number; swapTotal: number; swapUsed: number;
-  pressure: number; uptimeSecs: number; apps: AppUsage[];
+  pressure: number; uptimeSecs: number; apps: AppUsage[]; chrome: ChromeBreakdown;
 }
+export interface ChromeTab { id: string; window: number; title: string; url: string; memory: number | null; state: "measured" | "sleeping" | "unknown" }
+export interface ChromeTabList { canMeasure: boolean; tabs: ChromeTab[] }
 export interface TrashResult { path: string; ok: boolean; error: string | null }
 
 export const api = {
@@ -57,6 +63,8 @@ export const api = {
   memoryInfo: () => invoke<MemoryInfo>("memory_info"),
   trash: (paths: string[]) => invoke<TrashResult[]>("trash_paths", { paths }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
-  open: (place: "full-disk-access" | "storage-settings" | "trash" | "activity-monitor") => invoke<void>("open_place", { place }),
+  chromeTabs: () => invoke<ChromeTabList>("chrome_tabs"),
+  chromeTab: (id: string, action: "show" | "close") => invoke<void>("chrome_tab", { id, action }),
+  open: (place: "full-disk-access" | "storage-settings" | "trash" | "activity-monitor" | "automation") => invoke<void>("open_place", { place }),
   quitApp: (appPath: string) => invoke<void>("quit_app", { appPath }),
 };
