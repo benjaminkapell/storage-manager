@@ -22,6 +22,7 @@ sysinfo = "0.37"
 trash = "5"
 libc = "0.2"
 dirs = "6"
+mac-notification-sys = "0.6"
 
 [profile.release]
 opt-level = 3

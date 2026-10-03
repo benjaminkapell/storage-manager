@@ -53,6 +53,24 @@ export interface MemoryInfo {
 }
 export interface ChromeTab { id: string; window: number; title: string; url: string; memory: number | null; state: "measured" | "sleeping" | "unknown" }
 export interface ChromeTabList { canMeasure: boolean; tabs: ChromeTab[] }
+export interface Night {
+  start: number; end: number; hours: number; startCharge: number | null; endCharge: number | null; pluggedIn: boolean;
+  drainPerHour: number | null; wakes: number; awakeShare: number; topReason: string | null; keptAwakeBy: string[]; stuckAudio: string | null;
+}
+export type BatteryAction =
+  | { kind: "stop"; pids: number[] }
+  | { kind: "quit"; appPath: string }
+  | { kind: "fixSettings" }
+  | { kind: "open"; place: "bluetooth" | "login-items" };
+export interface BatteryFinding {
+  id: string; severity: "bad" | "warn" | "info"; title: string; detail: string; fix: string;
+  items: { label: string; detail: string }[]; action: BatteryAction | null; actionLabel: string | null;
+}
+export interface BatteryAudit {
+  checkedAt: number; hasBattery: boolean; charge: number | null; charging: boolean; onPower: boolean;
+  maxCapacity: number | null; cycles: number | null; health: string | null; uptimeDays: number;
+  nights: Night[]; findings: BatteryFinding[];
+}
 export interface TrashResult { path: string; ok: boolean; error: string | null }
 
 export const api = {
@@ -65,6 +83,11 @@ export const api = {
   reveal: (path: string) => invoke<void>("reveal", { path }),
   chromeTabs: () => invoke<ChromeTabList>("chrome_tabs"),
   chromeTab: (id: string, action: "show" | "close") => invoke<void>("chrome_tab", { id, action }),
-  open: (place: "full-disk-access" | "storage-settings" | "trash" | "activity-monitor" | "automation") => invoke<void>("open_place", { place }),
+  batteryAudit: () => invoke<BatteryAudit>("battery_audit"),
+  batteryLast: () => invoke<BatteryAudit | null>("battery_last"),
+  batteryStop: (pids: number[]) => invoke<number[]>("battery_stop", { pids }),
+  batteryFixSettings: () => invoke<void>("battery_fix_settings"),
+  batteryAuto: (on?: boolean) => invoke<boolean>("battery_auto", { on: on ?? null }),
+  open: (place: "full-disk-access" | "storage-settings" | "trash" | "activity-monitor" | "automation" | "bluetooth" | "login-items") => invoke<void>("open_place", { place }),
   quitApp: (appPath: string) => invoke<void>("quit_app", { appPath }),
 };

@@ -1,3 +1,4 @@
+mod battery;
 mod chrome;
 mod memory;
 mod safety;
@@ -125,6 +126,8 @@ fn open_place(place: String) {
         "automation" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation".to_string(),
         "trash" => format!("{}/.Trash", safety::home()),
         "activity-monitor" => "/System/Applications/Utilities/Activity Monitor.app".to_string(),
+        "bluetooth" => "x-apple.systempreferences:com.apple.BluetoothSettings".to_string(),
+        "login-items" => "x-apple.systempreferences:com.apple.LoginItems-Settings.extension".to_string(),
         _ => return,
     };
     let _ = Command::new("open").arg(target).spawn();
@@ -158,12 +161,49 @@ fn quit_app(app_path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn battery_audit() -> Result<battery::BatteryAudit, String> {
+    let a = tauri::async_runtime::spawn_blocking(battery::audit).await.map_err(|e| e.to_string())?;
+    battery::save_audit(&a);
+    Ok(a)
+}
+
+#[tauri::command]
+fn battery_last() -> Option<battery::BatteryAudit> {
+    battery::last_audit()
+}
+
+#[tauri::command]
+fn battery_stop(pids: Vec<i32>) -> Vec<i32> {
+    battery::stop(&pids)
+}
+
+#[tauri::command]
+async fn battery_fix_settings() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(battery::fix_settings).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn battery_auto(on: Option<bool>) -> Result<bool, String> {
+    if let Some(on) = on {
+        battery::set_auto_check(on)?;
+    }
+    Ok(battery::auto_check_enabled())
+}
+
+/// Headless mode used by the scheduled background check.
+pub fn background_battery_check() {
+    battery::background_check();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    std::thread::spawn(battery::ensure_auto_check);
     tauri::Builder::default()
         .manage(AppState { scanning: Arc::new(AtomicBool::new(false)), cancel: Arc::new(AtomicBool::new(false)), sys: Mutex::new(System::new()) })
         .invoke_handler(tauri::generate_handler![
-            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, open_place, quit_app, chrome_tabs, chrome_tab
+            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, open_place, quit_app, chrome_tabs, chrome_tab,
+            battery_audit, battery_last, battery_stop, battery_fix_settings, battery_auto
         ])
         .run(tauri::generate_context!())
         .expect("error while running Roomy");

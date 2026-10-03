@@ -1,10 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
 import clsx from "clsx";
-import { Copy, Eraser, FileStack, FolderTree, Gauge, MemoryStick, Settings2, type LucideIcon } from "lucide-react";
+import { BatteryMedium, Copy, Eraser, FileStack, FolderTree, Gauge, MemoryStick, Settings2, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmTrash, Toast, type ToastData } from "./components/TrashFlow";
 import { api, type DiskInfo, type Progress, type ScanResult } from "./lib/api";
 import { setHome, size } from "./lib/format";
+import Battery from "./views/Battery";
 import BigFiles from "./views/BigFiles";
 import CleanUp from "./views/CleanUp";
 import Duplicates from "./views/Duplicates";
@@ -13,7 +14,7 @@ import Memory from "./views/Memory";
 import Overview from "./views/Overview";
 import SystemData from "./views/SystemData";
 
-export type View = "overview" | "folders" | "cleanup" | "duplicates" | "big" | "system" | "memory";
+export type View = "overview" | "folders" | "cleanup" | "duplicates" | "big" | "system" | "memory" | "battery";
 export interface TrashItem { path: string; size: number; label?: string }
 export interface ViewProps {
   scan: ScanResult;
@@ -125,10 +126,11 @@ export default function App() {
     { id: "big", label: "Big files", icon: FileStack, meta: scan ? String(scan.bigFiles.length) : undefined },
     { id: "system", label: "System data", icon: Settings2 },
     { id: "memory", label: "Memory", icon: MemoryStick },
+    { id: "battery", label: "Battery", icon: BatteryMedium },
   ];
 
   const freePct = disk ? disk.free / disk.total : 1;
-  const needsScan = view !== "overview" && view !== "memory" && !scan;
+  const needsScan = view !== "overview" && view !== "memory" && view !== "battery" && !scan;
   const props: ViewProps | null = scan ? { scan, onTrash, go: setView } : null;
 
   return (
@@ -182,6 +184,7 @@ export default function App() {
             <Overview disk={disk} scan={scan} progress={progress} scanning={scanning} onScan={startScan} onCancel={() => api.cancelScan()} go={setView} />
           )}
           {view === "memory" && <Memory diskFreePct={freePct} />}
+          {view === "battery" && <Battery />}
           {needsScan && (
             <Overview disk={disk} scan={null} progress={progress} scanning={scanning} onScan={startScan} onCancel={() => api.cancelScan()} go={setView} compact />
           )}
