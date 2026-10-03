@@ -113,9 +113,29 @@ fn trash_paths(paths: Vec<String>) -> Vec<TrashResult> {
         .collect()
 }
 
+/// Show something in Finder. If it's gone (deleted since the scan), open the closest
+/// folder that still exists and say so, instead of silently doing nothing.
 #[tauri::command]
-fn reveal(path: String) {
-    let _ = Command::new("open").arg("-R").arg(path).spawn();
+fn reveal(path: String) -> Result<Option<String>, String> {
+    let p = std::path::Path::new(&path);
+    if p.symlink_metadata().is_ok() {
+        let out = Command::new("open").arg("-R").arg(p).output().map_err(|e| e.to_string())?;
+        return if out.status.success() { Ok(None) } else { Err("Finder couldn't show this.".into()) };
+    }
+    let mut up = p.parent();
+    while let Some(dir) = up {
+        if dir.is_dir() {
+            let _ = Command::new("open").arg(dir).output();
+            return Ok(Some(dir.to_string_lossy().into_owned()));
+        }
+        up = dir.parent();
+    }
+    Err("This no longer exists.".into())
+}
+
+#[tauri::command]
+fn paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| std::path::Path::new(p).symlink_metadata().is_ok()).collect()
 }
 
 #[tauri::command]
@@ -202,7 +222,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState { scanning: Arc::new(AtomicBool::new(false)), cancel: Arc::new(AtomicBool::new(false)), sys: Mutex::new(System::new()) })
         .invoke_handler(tauri::generate_handler![
-            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, open_place, quit_app, chrome_tabs, chrome_tab,
+            disk_info, start_scan, cancel_scan, load_last_scan, memory_info, trash_paths, reveal, paths_exist, open_place, quit_app, chrome_tabs, chrome_tab,
             battery_audit, battery_last, battery_stop, battery_fix_settings, battery_auto
         ])
         .run(tauri::generate_context!())
@@ -221,5 +241,18 @@ mod tests {
         for x in &r { println!("{} ok={} err={:?}", x.path, x.ok, x.error); }
         assert!(r[0].ok && !std::path::Path::new(&f).exists());
         assert!(!r[1].ok && !r[2].ok);
+    }
+}
+
+#[cfg(test)]
+mod reveal_tests {
+    #[test]
+    #[ignore]
+    fn reveal_missing_falls_back() {
+        let h = super::safety::home();
+        let r = super::reveal(format!("{h}/Library/Caches/Adobe/After Effects/25.6"));
+        println!("missing -> {r:?}");
+        assert_eq!(r, Ok(Some(format!("{h}/Library/Caches/Adobe"))));
+        assert_eq!(super::paths_exist(vec![format!("{h}/Library/Caches/Adobe"), format!("{h}/Library/Caches/Adobe/After Effects")]), vec![true, false]);
     }
 }

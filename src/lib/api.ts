@@ -80,7 +80,9 @@ export const api = {
   loadLastScan: () => invoke<ScanResult | null>("load_last_scan"),
   memoryInfo: () => invoke<MemoryInfo>("memory_info"),
   trash: (paths: string[]) => invoke<TrashResult[]>("trash_paths", { paths }),
-  reveal: (path: string) => invoke<void>("reveal", { path }),
+  /** Resolves to null when shown, or to the closest existing folder that was opened instead. */
+  reveal: (path: string) => invoke<string | null>("reveal", { path }),
+  pathsExist: (paths: string[]) => invoke<boolean[]>("paths_exist", { paths }),
   chromeTabs: () => invoke<ChromeTabList>("chrome_tabs"),
   chromeTab: (id: string, action: "show" | "close") => invoke<void>("chrome_tab", { id, action }),
   batteryAudit: () => invoke<BatteryAudit>("battery_audit"),

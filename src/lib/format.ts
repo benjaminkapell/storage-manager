@@ -87,5 +87,8 @@ export function folderLabel(p: string): string {
     "/opt": "Developer tools (Homebrew)",
     "/usr": "Command-line tools",
   };
-  return sys[p] ?? baseName(p);
+  if (sys[p]) return sys[p];
+  const name = baseName(p);
+  // Apps keep caches per version ("After Effects/25.6").
+  return /^\d+(\.\d+)+$/.test(name) ? `Version ${name}` : name;
 }

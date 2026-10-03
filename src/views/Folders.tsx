@@ -1,12 +1,14 @@
-import { ChevronRight, FolderSearch } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronRight, FolderSearch, RefreshCw, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { ViewProps } from "../App";
 import { Button, Card, PageHeader, SizeBar } from "../components/ui";
 import { api } from "../lib/api";
-import { folderLabel, parentOf, prettyPath, size } from "../lib/format";
+import { ago, folderLabel, parentOf, prettyPath, size } from "../lib/format";
 
-export default function Folders({ scan }: ViewProps) {
+export default function Folders({ scan, go }: ViewProps) {
   const [path, setPath] = useState("/");
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const [note, setNote] = useState<string | null>(null);
 
   const { bySize, children } = useMemo(() => {
     const bySize = new Map(scan.folders.map((f) => [f.path, f.size]));
@@ -26,6 +28,24 @@ export default function Folders({ scan }: ViewProps) {
   const inKids = kids.reduce((a, k) => a + (bySize.get(k) ?? 0), 0);
   const rest = total - inKids;
   const max = Math.max(bySize.get(kids[0]) ?? 0, rest);
+
+  // The scan can be days old: check what's still really there.
+  const kidsKey = kids.join("\n");
+  useEffect(() => {
+    setNote(null);
+    const check = [path, ...kidsKey.split("\n").filter(Boolean)];
+    api.pathsExist(check).then((ok) => setGone(new Set(check.filter((_, i) => !ok[i]))));
+  }, [path, kidsKey]);
+  const here = gone.has(path);
+
+  const reveal = async (p: string) => {
+    try {
+      const fallback = await api.reveal(p);
+      setNote(fallback ? `"${folderLabel(p)}" no longer exists, so Finder opened ${prettyPath(fallback)}, the closest folder that's still there.` : null);
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
 
   const crumbs: string[] = [];
   for (let p: string | null = path; p !== null; p = parentOf(p)) crumbs.unshift(p);
@@ -56,29 +76,40 @@ export default function Folders({ scan }: ViewProps) {
           </div>
           <div className="flex items-center gap-3">
             <span className="num text-[15px] font-semibold">{size(total)}</span>
-            {path !== "/" && <Button icon={FolderSearch} onClick={() => api.reveal(path)}>Show in Finder</Button>}
+            {path !== "/" && <Button icon={FolderSearch} onClick={() => reveal(path)}>Show in Finder</Button>}
           </div>
         </div>
+        {(note || here) && (
+          <div className="flex items-start gap-3 border-b border-line bg-warn-soft px-5 py-3 text-[13px]">
+            <TriangleAlert size={16} className="mt-0.5 shrink-0 text-warn-ink" />
+            <p className="flex-1 leading-relaxed">
+              {note ?? `This folder was deleted after your last scan (${ago(scan.finishedAt)}), so the sizes here are out of date.`}
+            </p>
+            {here && <Button icon={RefreshCw} onClick={() => go("overview")}>Scan again</Button>}
+          </div>
+        )}
         <ul className="divide-y divide-line">
           {kids.map((k) => {
             const s = bySize.get(k) ?? 0;
-            const deeper = (children.get(k)?.length ?? 0) > 0;
+            const missing = gone.has(k);
+            const deeper = !missing && (children.get(k)?.length ?? 0) > 0;
             return (
               <li key={k}>
                 <button
                   onClick={() => deeper && setPath(k)}
-                  className="group grid w-full grid-cols-[minmax(0,1fr)_minmax(120px,220px)_76px_28px] items-center gap-4 px-5 py-3 text-left transition-colors duration-100 hover:bg-surface-2/60"
+                  disabled={missing}
+                  className="group grid disabled:opacity-55 w-full grid-cols-[minmax(0,1fr)_minmax(120px,220px)_76px_28px] items-center gap-4 px-5 py-3 text-left transition-colors duration-100 hover:bg-surface-2/60"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{folderLabel(k)}</div>
-                    <div className="truncate text-[12px] text-ink-3">{Math.round((s / Math.max(total, 1)) * 100)}% of this folder</div>
+                    <div className="truncate text-[12px] text-ink-3">{missing ? "Gone since your last scan" : `${Math.round((s / Math.max(total, 1)) * 100)}% of this folder`}</div>
                   </div>
-                  <SizeBar value={s} max={max} />
+                  <SizeBar value={s} max={max} color={missing ? "var(--c-system)" : undefined} />
                   <span className="num text-right font-medium">{size(s)}</span>
-                  {deeper ? <ChevronRight size={16} className="text-ink-3 group-hover:text-ink" /> : <span
+                  {missing ? <span /> : deeper ? <ChevronRight size={16} className="text-ink-3 group-hover:text-ink" /> : <span
                     role="button" tabIndex={0} title="Show in Finder" aria-label="Show in Finder"
-                    onClick={(e) => { e.stopPropagation(); api.reveal(k); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); api.reveal(k); } }}
+                    onClick={(e) => { e.stopPropagation(); reveal(k); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); reveal(k); } }}
                     className="grid size-7 place-items-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink"><FolderSearch size={15} /></span>}
                 </button>
               </li>
@@ -97,7 +128,9 @@ export default function Folders({ scan }: ViewProps) {
           )}
         </ul>
       </Card>
-      <p className="mt-3 px-1 text-[12px] text-ink-3">Sizes are from your last scan. Things you moved to the Trash since then still count until you scan again.</p>
+      <p className="mt-3 px-1 text-[12px] text-ink-3">
+        Sizes are from your last scan ({ago(scan.finishedAt)}). Anything deleted since then still counts until you scan again.
+      </p>
     </div>
   );
 }
